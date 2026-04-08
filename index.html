@@ -5,16 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Background Remover</title>
     <link rel="icon" href="data:,">
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: transparent; margin: 0; padding: 15px; color: #333; }
+        body { font-family: -apple-system, sans-serif; background: transparent; margin: 0; padding: 15px; color: #333; }
         .container { max-width: 100%; margin: 0 auto; background: #fff; padding: 25px; border-radius: 12px; border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         .title { text-align: center; font-size: 1.8rem; font-weight: bold; margin-bottom: 20px; color: #222; }
         .panel { display: none; }
         .panel.active { display: block; }
-        .btn { display: block; width: 100%; background: #007bff; color: white; padding: 14px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; font-size: 1rem; text-align: center; text-decoration: none; margin-top: 15px; transition: 0.2s; }
+        .btn { display: block; width: 100%; background: #007bff; color: white; padding: 14px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; font-size: 1rem; text-align: center; text-decoration: none; margin-top: 15px; }
         .btn:hover { background: #0056b3; }
         .btn-alt { background: #6c757d; }
         .btn-success { background: #28a745; }
@@ -35,10 +34,10 @@
     <div class="title">Background Remover</div>
     
     <div id="setup-screen" class="panel active">
-        <p style="text-align:center; color:#666; line-height: 1.5;">This tool requires a one-time download of AI assets (~15MB).</p>
+        <p style="text-align:center; color:#666;">This tool requires a one-time download of AI assets (~15MB).</p>
         <button id="load-engine" class="btn">Initialize AI Engine</button>
         <div id="download-box" style="display:none; margin-top:20px;">
-            <div style="font-weight:bold; margin-bottom:5px;">Loading: <span id="dl-percent">0%</span></div>
+            <div style="font-weight:bold; margin-bottom:5px;">Progress: <span id="dl-percent">0%</span></div>
             <div class="progress-bar"><div id="dl-fill" class="progress-fill"></div></div>
         </div>
     </div>
@@ -75,13 +74,15 @@
 </div>
 
 <script type="module">
+    // Using jsDelivr for the library
     import * as imgly from 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
     const removeBackground = imgly.default || imgly.removeBackground;
 
-    // KEY FIX: Using the official img.ly resource path instead of jsDelivr for model files
+    // THE FIX: Pointing to the dedicated DATA package on jsDelivr
+    // This CDN is much more reliable for resolving DNS in India.
     const config = {
         model: 'small',
-        publicPath: 'https://static.img.ly/resources/background-removal/v1/',
+        publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.7.0/dist/',
         progress: (key, current, total) => {
             const percent = Math.round((current / total) * 100);
             const fill = document.getElementById('dl-fill');
@@ -93,13 +94,12 @@
         }
     };
 
-    // Initialization Logic
     document.getElementById('load-engine').addEventListener('click', async () => {
         document.getElementById('load-engine').style.display = "none";
         document.getElementById('download-box').style.display = "block";
         
         try {
-            // Draw a standard 100x100 white square for a valid initialization
+            // Standard initialization blob
             const canvas = document.createElement('canvas');
             canvas.width = 100; canvas.height = 100;
             const ctx = canvas.getContext('2d');
@@ -113,12 +113,13 @@
             document.getElementById('main-tool').style.display = "block";
         } catch (err) {
             console.error(err);
-            alert("Initialization failed. Check F12 console. Ensure 'publicPath' is correct.");
+            alert("Initialization failed. The CDN might be temporarily unreachable.");
             document.getElementById('load-engine').style.display = "block";
+            document.getElementById('download-box').style.display = "none";
         }
     });
 
-    // Simple Tab Switching
+    // Tab Logic
     document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', () => {
             document.querySelectorAll('.tab, .panel:not(#setup-screen)').forEach(el => el.classList.remove('active'));
@@ -131,7 +132,7 @@
     document.getElementById('upload-single').addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        document.querySelector('.status-box').innerText = "⏳ Processing Single Image...";
+        document.querySelector('.status-box').innerText = "⏳ Processing...";
         try {
             const blob = await removeBackground(file, config);
             const url = URL.createObjectURL(blob);
@@ -148,8 +149,7 @@
     document.getElementById('upload-batch').addEventListener('change', (e) => {
         batchFiles = Array.from(e.target.files).slice(0, 100);
         document.getElementById('batch-controls').style.display = "block";
-        document.getElementById('batch-status').innerText = `${batchFiles.length} files selected.`;
-        document.getElementById('dl-zip').style.display = "none";
+        document.getElementById('batch-status').innerText = `${batchFiles.length} files ready.`;
     });
 
     document.getElementById('start-batch').addEventListener('click', async () => {
@@ -165,7 +165,7 @@
             try {
                 const blob = await removeBackground(batchFiles[i], config);
                 zip.file(`nobg-${batchFiles[i].name.split('.')[0]}.png`, blob);
-            } catch (err) { console.error("Skipped:", batchFiles[i].name); }
+            } catch (err) { console.error("Skip:", batchFiles[i].name); }
         }
         
         const zipBlob = await zip.generateAsync({type: "blob"});
@@ -173,7 +173,7 @@
         dlBtn.href = URL.createObjectURL(zipBlob);
         dlBtn.download = "batch_results.zip";
         dlBtn.style.display = "block";
-        startBtn.innerText = "Batch Complete!";
+        startBtn.innerText = "Complete!";
     });
 </script>
 </body>
