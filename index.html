@@ -3,178 +3,231 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Background Remover</title>
+    <title>AI Background Remover - Multi Engine</title>
     <link rel="icon" href="data:,">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
     <style>
-        body { font-family: -apple-system, sans-serif; background: transparent; margin: 0; padding: 15px; color: #333; }
-        .container { max-width: 100%; margin: 0 auto; background: #fff; padding: 25px; border-radius: 12px; border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        .title { text-align: center; font-size: 1.8rem; font-weight: bold; margin-bottom: 20px; color: #222; }
+        :root { --primary: #007bff; --success: #28a745; --dark: #343a40; }
+        body { font-family: -apple-system, sans-serif; background: transparent; margin: 0; padding: 15px; color: #333; line-height: 1.5; }
+        .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 12px; border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        
+        .title { text-align: center; font-size: 1.8rem; font-weight: bold; margin-bottom: 5px; color: var(--dark); }
+        .subtitle { text-align: center; font-size: 0.9rem; color: #666; margin-bottom: 25px; }
+
+        /* Model Selection List */
+        .model-list { display: grid; gap: 10px; margin-bottom: 20px; }
+        .model-card { border: 2px solid #eee; border-radius: 8px; padding: 15px; cursor: pointer; transition: 0.2s; position: relative; }
+        .model-card:hover { border-color: var(--primary); background: #f0f7ff; }
+        .model-card.selected { border-color: var(--primary); background: #e7f1ff; }
+        .model-card h4 { margin: 0 0 5px 0; display: flex; justify-content: space-between; }
+        .model-card p { margin: 0; font-size: 0.85rem; color: #555; }
+        .badge { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; color: white; text-transform: uppercase; }
+        .bg-lite { background: #6c757d; }
+        .bg-pro { background: #fd7e14; }
+
         .panel { display: none; }
         .panel.active { display: block; }
-        .btn { display: block; width: 100%; background: #007bff; color: white; padding: 14px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; font-size: 1rem; text-align: center; text-decoration: none; margin-top: 15px; }
-        .btn:hover { background: #0056b3; }
-        .btn-alt { background: #6c757d; }
-        .btn-success { background: #28a745; }
+        
+        .btn { display: block; width: 100%; background: var(--primary); color: white; padding: 14px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; font-size: 1rem; text-align: center; text-decoration: none; margin-top: 10px; }
         .btn:disabled { background: #cbd5e0; cursor: not-allowed; }
-        .drop-zone { border: 2px dashed #ccc; padding: 40px; text-align: center; border-radius: 10px; background: #fafafa; margin-bottom: 20px; }
+        .btn-success { background: var(--success); }
+        
         .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #eee; }
-        .tab { background: none; border: none; padding: 12px 20px; cursor: pointer; color: #777; border-bottom: 3px solid transparent; flex: 1; text-align: center; }
-        .tab.active { color: #007bff; border-bottom-color: #007bff; font-weight: bold; }
-        .progress-bar { width: 100%; height: 12px; background: #e9ecef; border-radius: 6px; overflow: hidden; margin-top: 10px; }
-        .progress-fill { width: 0%; height: 100%; background: #007bff; transition: width 0.2s; }
-        #preview-img { max-width: 100%; height: auto; display: block; margin: 15px auto; border-radius: 8px; border: 1px solid #eee; }
-        .status-box { background: #eef9f0; color: #1e7e34; padding: 12px; border-radius: 6px; text-align: center; margin-bottom: 20px; font-weight: bold; border: 1px solid #c3e6cb; }
+        .tab { background: none; border: none; padding: 12px; cursor: pointer; color: #777; flex: 1; border-bottom: 3px solid transparent; font-weight: bold; }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+        .progress-container { margin-top: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #eee; }
+        .progress-bar { width: 100%; height: 10px; background: #e9ecef; border-radius: 5px; overflow: hidden; margin: 10px 0; }
+        .progress-fill { width: 0%; height: 100%; background: var(--primary); transition: width 0.2s; }
+        
+        #preview-img { max-width: 100%; height: auto; display: block; margin: 15px auto; border-radius: 8px; border: 1px solid #eee; background: #f0f0f0; }
+        .drop-zone { border: 2px dashed #ccc; padding: 30px; text-align: center; border-radius: 10px; background: #fafafa; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="title">Background Remover</div>
-    
-    <div id="setup-screen" class="panel active">
-        <p style="text-align:center; color:#666;">This tool requires a one-time download of AI assets (~15MB).</p>
-        <button id="load-engine" class="btn">Initialize AI Engine</button>
-        <div id="download-box" style="display:none; margin-top:20px;">
-            <div style="font-weight:bold; margin-bottom:5px;">Progress: <span id="dl-percent">0%</span></div>
+    <div class="title">AI Engine Selector</div>
+    <div class="subtitle">Choose a model based on your device and quality needs</div>
+
+    <div id="setup-screen">
+        <div class="model-list">
+            <div class="model-card" onclick="selectModel('Xenova/modnet-public', this)">
+                <h4>MODNet <span class="badge bg-lite">Lite</span></h4>
+                <p><b>Size:</b> ~10MB | <b>Best for:</b> Mobile, quick portraits. Soft edges.</p>
+            </div>
+            <div class="model-card selected" onclick="selectModel('briaai/RMBG-1.4', this)">
+                <h4>RMBG 1.4 <span class="badge bg-pro">High Quality</span></h4>
+                <p><b>Size:</b> ~70MB | <b>Best for:</b> Desktop, professional cutouts. Sharp edges.</p>
+            </div>
+        </div>
+
+        <button id="load-engine" class="btn">Initialize Selected Engine</button>
+        
+        <div id="download-box" style="display:none;" class="progress-container">
+            <div style="font-size: 0.9rem;"><b>Loading AI Weights:</b> <span id="dl-percent">0%</span></div>
             <div class="progress-bar"><div id="dl-fill" class="progress-fill"></div></div>
+            <div id="dl-item" style="font-size: 0.7rem; color: #888;">Connecting to Hugging Face...</div>
         </div>
     </div>
 
-    <div id="main-tool" style="display:none;">
-        <div class="status-box">✅ AI Engine Ready</div>
+    <div id="main-tool" class="panel">
         <div class="tabs">
-            <button class="tab active" data-target="panel-single">Single Image</button>
-            <button class="tab" data-target="panel-batch">Batch Mode</button>
+            <button class="tab active" onclick="switchTab('single', this)">Single Image</button>
+            <button class="tab" onclick="switchTab('batch', this)">Batch (Max 100)</button>
         </div>
+
         <div id="panel-single" class="panel active">
-            <div class="drop-zone">
+            <div class="drop-zone" onclick="document.getElementById('upload-single').click()">
                 <input type="file" id="upload-single" hidden accept="image/*">
-                <button class="btn btn-alt" onclick="document.getElementById('upload-single').click()">Select Image</button>
+                <p>Click to process single image</p>
             </div>
             <div id="single-result" style="display:none;">
                 <img id="preview-img">
                 <a id="dl-single" class="btn btn-success">Download PNG</a>
             </div>
         </div>
+
         <div id="panel-batch" class="panel">
-            <div class="drop-zone">
+            <div class="drop-zone" onclick="document.getElementById('upload-batch').click()">
                 <input type="file" id="upload-batch" hidden accept="image/*" multiple>
-                <button class="btn btn-alt" onclick="document.getElementById('upload-batch').click()">Select Multiple Images</button>
+                <p>Select multiple images (Max 100)</p>
             </div>
-            <div id="batch-controls" style="display:none;">
+            <div id="batch-controls" style="display:none;" class="progress-container">
                 <button id="start-batch" class="btn">Start Batch Processing</button>
-                <p id="batch-status" style="margin-top:15px; font-weight:bold;">Ready</p>
-                <div class="progress-bar"><div id="batch-progress-fill" class="progress-fill"></div></div>
-                <a id="dl-zip" class="btn btn-success" style="display:none;">Download All (ZIP)</a>
+                <div style="margin-top:15px;">
+                    <div id="batch-status" style="font-size:0.85rem; font-weight:bold;">Ready</div>
+                    <div class="progress-bar"><div id="batch-fill" class="progress-fill"></div></div>
+                </div>
+                <a id="dl-zip" class="btn btn-success" style="display:none;">Download ZIP</a>
             </div>
         </div>
     </div>
 </div>
 
 <script type="module">
-    // Using jsDelivr for the library
-    import * as imgly from 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
-    const removeBackground = imgly.default || imgly.removeBackground;
+    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
+    
+    // Configuration
+    env.allowLocalModels = false;
+    let selectedModelPath = 'briaai/RMBG-1.4';
+    let segmenter = null;
 
-    // THE FIX: Pointing to the dedicated DATA package on jsDelivr
-    // This CDN is much more reliable for resolving DNS in India.
-    const config = {
-        model: 'small',
-        publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal-data@1.7.0/dist/',
-        progress: (key, current, total) => {
-            const percent = Math.round((current / total) * 100);
-            const fill = document.getElementById('dl-fill');
-            const txt = document.getElementById('dl-percent');
-            if (fill && txt) {
-                fill.style.width = percent + '%';
-                txt.innerText = percent + '%';
-            }
-        }
+    window.selectModel = (path, el) => {
+        selectedModelPath = path;
+        document.querySelectorAll('.model-card').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
     };
 
+    window.switchTab = (id, el) => {
+        document.querySelectorAll('.tab, .panel:not(#setup-screen)').forEach(x => x.classList.remove('active'));
+        el.classList.add('active');
+        document.getElementById('panel-' + id).classList.add('active');
+    };
+
+    // --- Engine Initialization ---
     document.getElementById('load-engine').addEventListener('click', async () => {
-        document.getElementById('load-engine').style.display = "none";
-        document.getElementById('download-box').style.display = "block";
-        
+        const loadBtn = document.getElementById('load-engine');
+        const dlBox = document.getElementById('download-box');
+        loadBtn.style.display = 'none';
+        dlBox.style.display = 'block';
+
         try {
-            // Standard initialization blob
-            const canvas = document.createElement('canvas');
-            canvas.width = 100; canvas.height = 100;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, 100, 100);
-            const dummyBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg'));
-            
-            await removeBackground(dummyBlob, config);
-            
-            document.getElementById('setup-screen').style.display = "none";
-            document.getElementById('main-tool').style.display = "block";
+            segmenter = await pipeline('image-segmentation', selectedModelPath, {
+                progress_callback: (data) => {
+                    if (data.status === 'progress') {
+                        const p = Math.round(data.progress);
+                        document.getElementById('dl-fill').style.width = p + '%';
+                        document.getElementById('dl-percent').innerText = p + '%';
+                        document.getElementById('dl-item').innerText = "Loading: " + data.file;
+                    }
+                }
+            });
+
+            document.getElementById('setup-screen').style.display = 'none';
+            document.getElementById('main-tool').classList.add('active');
         } catch (err) {
             console.error(err);
-            alert("Initialization failed. The CDN might be temporarily unreachable.");
-            document.getElementById('load-engine').style.display = "block";
-            document.getElementById('download-box').style.display = "none";
+            alert("Initialization failed. This usually happens if the model is too heavy for your device's RAM.");
+            loadBtn.style.display = 'block';
         }
     });
 
-    // Tab Logic
-    document.querySelectorAll('.tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            document.querySelectorAll('.tab, .panel:not(#setup-screen)').forEach(el => el.classList.remove('active'));
-            tab.classList.add('active');
-            document.getElementById(tab.dataset.target).classList.add('active');
+    // --- Processing Function ---
+    async function removeBG(file) {
+        const imgUrl = URL.createObjectURL(file);
+        const output = await segmenter(imgUrl);
+        // The output is the mask. We apply it to the original image.
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        return new Promise((resolve) => {
+            img.onload = async () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                // Draw the mask
+                ctx.drawImage(output.mask.toCanvas(), 0, 0, img.width, img.height);
+                // Composite the original image
+                ctx.globalCompositeOperation = 'source-in';
+                ctx.drawImage(img, 0, 0);
+                canvas.toBlob(resolve, 'image/png');
+            };
+            img.src = imgUrl;
         });
-    });
+    }
 
-    // Single Logic
+    // --- Single UI ---
     document.getElementById('upload-single').addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        document.querySelector('.status-box').innerText = "⏳ Processing...";
-        try {
-            const blob = await removeBackground(file, config);
-            const url = URL.createObjectURL(blob);
-            document.getElementById('preview-img').src = url;
-            document.getElementById('dl-single').href = url;
-            document.getElementById('dl-single').download = `nobg_${file.name.split('.')[0]}.png`;
-            document.getElementById('single-result').style.display = "block";
-            document.querySelector('.status-box').innerText = "✅ Done!";
-        } catch (err) { alert("Error processing image."); }
+        document.getElementById('single-result').style.display = 'none';
+        
+        const blob = await removeBG(file);
+        const url = URL.createObjectURL(blob);
+        const preview = document.getElementById('preview-img');
+        preview.src = url;
+        preview.style.display = 'block';
+        
+        const dl = document.getElementById('dl-single');
+        dl.href = url;
+        dl.download = `cleaned_${file.name.split('.')[0]}.png`;
+        document.getElementById('single-result').style.display = 'block';
     });
 
-    // Batch Logic
-    let batchFiles = [];
+    // --- Batch UI ---
+    let batchQueue = [];
     document.getElementById('upload-batch').addEventListener('change', (e) => {
-        batchFiles = Array.from(e.target.files).slice(0, 100);
-        document.getElementById('batch-controls').style.display = "block";
-        document.getElementById('batch-status').innerText = `${batchFiles.length} files ready.`;
+        batchQueue = Array.from(e.target.files).slice(0, 100);
+        document.getElementById('batch-controls').style.display = 'block';
+        document.getElementById('batch-status').innerText = `${batchQueue.length} files in queue.`;
     });
 
     document.getElementById('start-batch').addEventListener('click', async () => {
         const zip = new window.JSZip();
         const startBtn = document.getElementById('start-batch');
-        const progFill = document.getElementById('batch-progress-fill');
-        const statusText = document.getElementById('batch-status');
-        startBtn.disabled = true;
+        const fill = document.getElementById('batch-fill');
+        const status = document.getElementById('batch-status');
         
-        for (let i = 0; i < batchFiles.length; i++) {
-            statusText.innerText = `Processing ${i+1}/${batchFiles.length}`;
-            progFill.style.width = `${((i + 1) / batchFiles.length) * 100}%`;
-            try {
-                const blob = await removeBackground(batchFiles[i], config);
-                zip.file(`nobg-${batchFiles[i].name.split('.')[0]}.png`, blob);
-            } catch (err) { console.error("Skip:", batchFiles[i].name); }
+        startBtn.disabled = true;
+        for (let i = 0; i < batchQueue.length; i++) {
+            status.innerText = `Processing ${i+1}/${batchQueue.length}`;
+            fill.style.width = ((i+1)/batchQueue.length)*100 + '%';
+            
+            const blob = await removeBG(batchQueue[i]);
+            zip.file(`nobg-${batchQueue[i].name.split('.')[0]}.png`, blob);
         }
         
-        const zipBlob = await zip.generateAsync({type: "blob"});
-        const dlBtn = document.getElementById('dl-zip');
-        dlBtn.href = URL.createObjectURL(zipBlob);
-        dlBtn.download = "batch_results.zip";
-        dlBtn.style.display = "block";
-        startBtn.innerText = "Complete!";
+        status.innerText = "Creating ZIP...";
+        const zipContent = await zip.generateAsync({type: 'blob'});
+        const dlZip = document.getElementById('dl-zip');
+        dlZip.href = URL.createObjectURL(zipContent);
+        dlZip.download = "toolbox_batch_results.zip";
+        dlZip.style.display = 'block';
+        startBtn.innerText = "Batch Finished!";
     });
 </script>
+
 </body>
 </html>
