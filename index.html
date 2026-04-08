@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Background Remover</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: transparent; margin: 0; padding: 15px; color: #333; }
+        .container { max-width: 100%; margin: 0 auto; background: #fff; padding: 25px; border-radius: 12px; border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .title { text-align: center; font-size: 1.8rem; font-weight: bold; margin-bottom: 20px; color: #222; }
+        
+        .panel { display: none; }
+        .panel.active { display: block; }
+        
+        .btn { display: block; width: 100%; background: #007bff; color: white; padding: 14px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; font-size: 1rem; text-align: center; text-decoration: none; margin-top: 15px; box-sizing: border-box; transition: 0.2s; }
+        .btn:hover { background: #0056b3; }
+        .btn-alt { background: #6c757d; }
+        .btn-alt:hover { background: #5a6268; }
+        .btn-success { background: #28a745; }
+        .btn-success:hover { background: #218838; }
+        .btn:disabled { background: #cbd5e0; cursor: not-allowed; }
+        
+        .drop-zone { border: 2px dashed #ccc; padding: 40px; text-align: center; border-radius: 10px; background: #fafafa; margin-bottom: 20px; color: #555; }
+        
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #eee; }
+        .tab { background: none; border: none; padding: 12px 20px; cursor: pointer; color: #777; border-bottom: 3px solid transparent; font-size: 1rem; flex: 1; text-align: center; }
+        .tab.active { color: #007bff; border-bottom-color: #007bff; font-weight: bold; }
+        
+        .progress-bar { width: 100%; height: 12px; background: #e9ecef; border-radius: 6px; overflow: hidden; margin-top: 10px; }
+        .progress-fill { width: 0%; height: 100%; background: #007bff; transition: width 0.2s; }
+        
+        #preview-img { max-width: 100%; height: auto; display: block; margin: 15px auto; border-radius: 8px; border: 1px solid #eee; }
+        .status-box { background: #eef9f0; color: #1e7e34; padding: 12px; border-radius: 6px; text-align: center; margin-bottom: 20px; font-weight: bold; border: 1px solid #c3e6cb; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="title">Background Remover</div>
+    
+    <div id="setup-screen" class="panel active">
+        <p style="text-align:center; color:#666; line-height: 1.5;">
+            This tool runs 100% locally in your browser for maximum privacy.<br>
+            It requires a one-time download of the AI model (~15MB).
+        </p>
+        <button id="load-engine" class="btn">Initialize AI Engine</button>
+        
+        <div id="download-box" style="display:none; margin-top:20px;">
+            <div style="font-weight:bold; margin-bottom:5px; color:#444;">Downloading Assets: <span id="dl-percent">0%</span></div>
+            <div class="progress-bar"><div id="dl-fill" class="progress-fill"></div></div>
+        </div>
+    </div>
+
+    <div id="main-tool" style="display:none;">
+        <div class="status-box">✅ AI Engine Ready</div>
+        
+        <div class="tabs">
+            <button class="tab active" data-target="panel-single">Single Image</button>
+            <button class="tab" data-target="panel-batch">Batch Mode (Max 100)</button>
+        </div>
+
+        <div id="panel-single" class="panel active">
+            <div class="drop-zone">
+                <input type="file" id="upload-single" hidden accept="image/*">
+                <p style="margin-top:0;">Select an image to remove its background.</p>
+                <button class="btn btn-alt" onclick="document.getElementById('upload-single').click()">Select Image</button>
+            </div>
+            <div id="single-result" style="display:none;">
+                <img id="preview-img">
+                <a id="dl-single" class="btn btn-success">Download PNG</a>
+            </div>
+        </div>
+
+        <div id="panel-batch" class="panel">
+            <div class="drop-zone">
+                <input type="file" id="upload-batch" hidden accept="image/*" multiple>
+                <p style="margin-top:0;">Select up to 100 images to process automatically.</p>
+                <button class="btn btn-alt" onclick="document.getElementById('upload-batch').click()">Select Multiple Images</button>
+            </div>
+            <div id="batch-controls" style="display:none; margin-top:15px;">
+                <button id="start-batch" class="btn">Start Batch Processing</button>
+                <div style="margin-top:20px;">
+                    <p id="batch-status" style="font-weight:bold; color:#444;">Ready</p>
+                    <div class="progress-bar"><div id="batch-progress-fill" class="progress-fill"></div></div>
+                </div>
+                <a id="dl-zip" class="btn btn-success" style="display:none;">Download All (ZIP)</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import imglyRemoveBackground from 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
+
+    const config = {
+        model: 'small',
+        publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/dist/',
+        progress: (key, current, total) => {
+            const percent = Math.round((current / total) * 100);
+            document.getElementById('dl-fill').style.width = percent + '%';
+            document.getElementById('dl-percent').innerText = percent + '%';
+        }
+    };
+
+    // 1. Initialization (Using Canvas Hack)
+    document.getElementById('load-engine').addEventListener('click', async () => {
+        document.getElementById('load-engine').style.display = "none";
+        document.getElementById('download-box').style.display = "block";
+        
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 50; canvas.height = 50;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 50, 50);
+            const dummyBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
+            
+            await imglyRemoveBackground(dummyBlob, config);
+            
+            document.getElementById('setup-screen').style.display = "none";
+            document.getElementById('main-tool').style.display = "block";
+        } catch (err) {
+            console.error(err);
+            alert("Initialization failed. Please check your connection or disable aggressive adblockers.");
+            document.getElementById('load-engine').style.display = "block";
+            document.getElementById('download-box').style.display = "none";
+        }
+    });
+
+    // 2. Tab Navigation
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.tab, .panel:not(#setup-screen)').forEach(el => el.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById(tab.dataset.target).classList.add('active');
+        });
+    });
+
+    // 3. Single Image Processing
+    document.getElementById('upload-single').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const btn = document.querySelector('[data-target="panel-single"]');
+        const originalText = btn.innerText;
+        btn.innerText = "⏳ Processing...";
+        
+        try {
+            const blob = await imglyRemoveBackground(file, config);
+            const url = URL.createObjectURL(blob);
+            document.getElementById('preview-img').src = url;
+            
+            const dlBtn = document.getElementById('dl-single');
+            dlBtn.href = url;
+            dlBtn.download = `bg_removed_${file.name.split('.')[0]}.png`;
+            document.getElementById('single-result').style.display = "block";
+        } catch (err) {
+            alert("Error processing image.");
+        } finally {
+            btn.innerText = originalText;
+        }
+    });
+
+    // 4. Batch Image Processing
+    let batchFiles = [];
+    document.getElementById('upload-batch').addEventListener('change', (e) => {
+        batchFiles = Array.from(e.target.files).slice(0, 100);
+        document.getElementById('batch-controls').style.display = "block";
+        document.getElementById('batch-status').innerText = `${batchFiles.length} images selected.`;
+        document.getElementById('dl-zip').style.display = "none";
+        document.getElementById('start-batch').disabled = false;
+        document.getElementById('start-batch').innerText = "Start Batch Processing";
+        document.getElementById('batch-progress-fill').style.width = '0%';
+    });
+
+    document.getElementById('start-batch').addEventListener('click', async () => {
+        const zip = new JSZip();
+        const startBtn = document.getElementById('start-batch');
+        const progFill = document.getElementById('batch-progress-fill');
+        const statusText = document.getElementById('batch-status');
+        
+        startBtn.disabled = true;
+        
+        for (let i = 0; i < batchFiles.length; i++) {
+            statusText.innerText = `Processing ${i+1}/${batchFiles.length}: ${batchFiles[i].name}`;
+            progFill.style.width = `${((i + 1) / batchFiles.length) * 100}%`;
+            
+            try {
+                const blob = await imglyRemoveBackground(batchFiles[i], config);
+                zip.file(`no-bg-${batchFiles[i].name.split('.')[0]}.png`, blob);
+            } catch (err) { 
+                console.error("Skipped file:", batchFiles[i].name); 
+            }
+        }
+        
+        statusText.innerText = "Packing ZIP file...";
+        const zipBlob = await zip.generateAsync({type: "blob"});
+        
+        const dlBtn = document.getElementById('dl-zip');
+        dlBtn.href = URL.createObjectURL(zipBlob);
+        dlBtn.download = "batch_bg_removed.zip";
+        dlBtn.style.display = "block";
+        
+        startBtn.innerText = "Batch Complete!";
+        statusText.innerText = "✅ All images processed and zipped.";
+    });
+</script>
+
+</body>
+</html>
