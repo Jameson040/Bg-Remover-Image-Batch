@@ -6,7 +6,6 @@
     <title>AI Background Remover</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/dist/index.js"></script>
     
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: transparent; margin: 0; padding: 15px; color: #333; }
@@ -93,7 +92,13 @@
     </div>
 </div>
 
-<script>
+<script type="module">
+    // 1. We import the entire module package under the name "imgly"
+    import * as imgly from 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm';
+    
+    // 2. We safely unpack the box! This prevents the "not a function" error
+    const removeBackground = imgly.default || imgly.removeBackground;
+
     const config = {
         model: 'small',
         publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/dist/',
@@ -104,17 +109,12 @@
         }
     };
 
-    // 1. Initialization (Using Canvas Hack)
+    // --- Initialization ---
     document.getElementById('load-engine').addEventListener('click', async () => {
         document.getElementById('load-engine').style.display = "none";
         document.getElementById('download-box').style.display = "block";
         
         try {
-            // Check if library loaded globally
-            if (typeof window.imglyRemoveBackground !== 'function') {
-                throw new Error("Library script failed to load from CDN.");
-            }
-
             const canvas = document.createElement('canvas');
             canvas.width = 50; canvas.height = 50;
             const ctx = canvas.getContext('2d');
@@ -122,20 +122,20 @@
             ctx.fillRect(0, 0, 50, 50);
             const dummyBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
             
-            // Call the global function
-            await window.imglyRemoveBackground(dummyBlob, config);
+            // Call the safely extracted function
+            await removeBackground(dummyBlob, config);
             
             document.getElementById('setup-screen').style.display = "none";
             document.getElementById('main-tool').style.display = "block";
         } catch (err) {
             console.error(err);
-            alert("Initialization failed. Please check your connection or disable aggressive adblockers.");
+            alert("Initialization failed. Please check your console for details.");
             document.getElementById('load-engine').style.display = "block";
             document.getElementById('download-box').style.display = "none";
         }
     });
 
-    // 2. Tab Navigation
+    // --- Tab Navigation ---
     document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', () => {
             document.querySelectorAll('.tab, .panel:not(#setup-screen)').forEach(el => el.classList.remove('active'));
@@ -144,7 +144,7 @@
         });
     });
 
-    // 3. Single Image Processing
+    // --- Single Image Processing ---
     document.getElementById('upload-single').addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -154,7 +154,7 @@
         btn.innerText = "⏳ Processing...";
         
         try {
-            const blob = await window.imglyRemoveBackground(file, config);
+            const blob = await removeBackground(file, config);
             const url = URL.createObjectURL(blob);
             document.getElementById('preview-img').src = url;
             
@@ -170,7 +170,7 @@
         }
     });
 
-    // 4. Batch Image Processing
+    // --- Batch Image Processing ---
     let batchFiles = [];
     document.getElementById('upload-batch').addEventListener('change', (e) => {
         batchFiles = Array.from(e.target.files).slice(0, 100);
@@ -183,7 +183,7 @@
     });
 
     document.getElementById('start-batch').addEventListener('click', async () => {
-        const zip = new JSZip();
+        const zip = new window.JSZip();
         const startBtn = document.getElementById('start-batch');
         const progFill = document.getElementById('batch-progress-fill');
         const statusText = document.getElementById('batch-status');
@@ -195,7 +195,7 @@
             progFill.style.width = `${((i + 1) / batchFiles.length) * 100}%`;
             
             try {
-                const blob = await window.imglyRemoveBackground(batchFiles[i], config);
+                const blob = await removeBackground(batchFiles[i], config);
                 zip.file(`no-bg-${batchFiles[i].name.split('.')[0]}.png`, blob);
             } catch (err) { 
                 console.error("Skipped file:", batchFiles[i].name); 
@@ -214,6 +214,5 @@
         statusText.innerText = "✅ All images processed and zipped.";
     });
 </script>
-
 </body>
 </html>
