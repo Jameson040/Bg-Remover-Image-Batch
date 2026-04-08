@@ -3,24 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Background Remover - Multi Engine</title>
+    <title>AI Background Remover - Silent Version</title>
     <link rel="icon" href="data:,">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
     <style>
-        :root { --primary: #007bff; --success: #28a745; --dark: #343a40; }
+        :root { --primary: #007bff; --success: #28a745; --dark: #343a40; --error: #dc3545; }
         body { font-family: -apple-system, sans-serif; background: transparent; margin: 0; padding: 15px; color: #333; line-height: 1.5; }
         .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 12px; border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         
         .title { text-align: center; font-size: 1.8rem; font-weight: bold; margin-bottom: 5px; color: var(--dark); }
         .subtitle { text-align: center; font-size: 0.9rem; color: #666; margin-bottom: 25px; }
 
-        /* Model Selection List */
         .model-list { display: grid; gap: 10px; margin-bottom: 20px; }
         .model-card { border: 2px solid #eee; border-radius: 8px; padding: 15px; cursor: pointer; transition: 0.2s; position: relative; }
         .model-card:hover { border-color: var(--primary); background: #f0f7ff; }
         .model-card.selected { border-color: var(--primary); background: #e7f1ff; }
-        .model-card h4 { margin: 0 0 5px 0; display: flex; justify-content: space-between; }
+        .model-card h4 { margin: 0 0 5px 0; display: flex; justify-content: space-between; align-items: center; }
         .model-card p { margin: 0; font-size: 0.85rem; color: #555; }
         .badge { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; color: white; text-transform: uppercase; }
         .bg-lite { background: #6c757d; }
@@ -43,27 +42,30 @@
         
         #preview-img { max-width: 100%; height: auto; display: block; margin: 15px auto; border-radius: 8px; border: 1px solid #eee; background: #f0f0f0; }
         .drop-zone { border: 2px dashed #ccc; padding: 30px; text-align: center; border-radius: 10px; background: #fafafa; cursor: pointer; }
+        
+        #error-display { color: var(--error); font-size: 0.85rem; text-align: center; margin-top: 10px; display: none; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="title">AI Engine Selector</div>
-    <div class="subtitle">Choose a model based on your device and quality needs</div>
+    <div id="main-subtitle" class="subtitle">Choose a model based on your device and quality needs</div>
 
     <div id="setup-screen">
         <div class="model-list">
             <div class="model-card" onclick="selectModel('Xenova/modnet-public', this)">
                 <h4>MODNet <span class="badge bg-lite">Lite</span></h4>
-                <p><b>Size:</b> ~10MB | <b>Best for:</b> Mobile, quick portraits. Soft edges.</p>
+                <p><b>Size:</b> ~10MB | Best for Mobile. Quick portraits.</p>
             </div>
             <div class="model-card selected" onclick="selectModel('briaai/RMBG-1.4', this)">
                 <h4>RMBG 1.4 <span class="badge bg-pro">High Quality</span></h4>
-                <p><b>Size:</b> ~70MB | <b>Best for:</b> Desktop, professional cutouts. Sharp edges.</p>
+                <p><b>Size:</b> ~70MB | Best for Desktop. Professional cutouts.</p>
             </div>
         </div>
 
         <button id="load-engine" class="btn">Initialize Selected Engine</button>
+        <div id="error-display">Something went wrong. Please refresh and try a lighter model.</div>
         
         <div id="download-box" style="display:none;" class="progress-container">
             <div style="font-size: 0.9rem;"><b>Loading AI Weights:</b> <span id="dl-percent">0%</span></div>
@@ -75,13 +77,13 @@
     <div id="main-tool" class="panel">
         <div class="tabs">
             <button class="tab active" onclick="switchTab('single', this)">Single Image</button>
-            <button class="tab" onclick="switchTab('batch', this)">Batch (Max 100)</button>
+            <button class="tab" onclick="switchTab('batch', this)">Batch Mode</button>
         </div>
 
         <div id="panel-single" class="panel active">
             <div class="drop-zone" onclick="document.getElementById('upload-single').click()">
                 <input type="file" id="upload-single" hidden accept="image/*">
-                <p>Click to process single image</p>
+                <p id="single-status">Click to upload image</p>
             </div>
             <div id="single-result" style="display:none;">
                 <img id="preview-img">
@@ -92,7 +94,7 @@
         <div id="panel-batch" class="panel">
             <div class="drop-zone" onclick="document.getElementById('upload-batch').click()">
                 <input type="file" id="upload-batch" hidden accept="image/*" multiple>
-                <p>Select multiple images (Max 100)</p>
+                <p id="batch-upload-status">Select images (Max 100)</p>
             </div>
             <div id="batch-controls" style="display:none;" class="progress-container">
                 <button id="start-batch" class="btn">Start Batch Processing</button>
@@ -109,15 +111,17 @@
 <script type="module">
     import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
     
-    // Configuration
     env.allowLocalModels = false;
     let selectedModelPath = 'briaai/RMBG-1.4';
     let segmenter = null;
+
+    const errorDisplay = document.getElementById('error-display');
 
     window.selectModel = (path, el) => {
         selectedModelPath = path;
         document.querySelectorAll('.model-card').forEach(c => c.classList.remove('selected'));
         el.classList.add('selected');
+        errorDisplay.style.display = 'none';
     };
 
     window.switchTab = (id, el) => {
@@ -132,6 +136,7 @@
         const dlBox = document.getElementById('download-box');
         loadBtn.style.display = 'none';
         dlBox.style.display = 'block';
+        errorDisplay.style.display = 'none';
 
         try {
             segmenter = await pipeline('image-segmentation', selectedModelPath, {
@@ -148,52 +153,61 @@
             document.getElementById('setup-screen').style.display = 'none';
             document.getElementById('main-tool').classList.add('active');
         } catch (err) {
-            console.error(err);
-            alert("Initialization failed. This usually happens if the model is too heavy for your device's RAM.");
+            console.error("Initialization error:", err);
+            // Instead of an alert, we show the error in the UI and let them try again.
+            dlBox.style.display = 'none';
             loadBtn.style.display = 'block';
+            errorDisplay.style.display = 'block';
+            errorDisplay.innerText = "Error: Model loading failed. This device may not have enough memory for this model.";
         }
     });
 
-    // --- Processing Function ---
     async function removeBG(file) {
-        const imgUrl = URL.createObjectURL(file);
-        const output = await segmenter(imgUrl);
-        // The output is the mask. We apply it to the original image.
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const img = new Image();
-        
-        return new Promise((resolve) => {
-            img.onload = async () => {
-                canvas.width = img.width;
-                canvas.height = img.height;
-                // Draw the mask
-                ctx.drawImage(output.mask.toCanvas(), 0, 0, img.width, img.height);
-                // Composite the original image
-                ctx.globalCompositeOperation = 'source-in';
-                ctx.drawImage(img, 0, 0);
-                canvas.toBlob(resolve, 'image/png');
-            };
-            img.src = imgUrl;
-        });
+        try {
+            const imgUrl = URL.createObjectURL(file);
+            const output = await segmenter(imgUrl);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            return new Promise((resolve, reject) => {
+                img.onload = () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(output.mask.toCanvas(), 0, 0, img.width, img.height);
+                    ctx.globalCompositeOperation = 'source-in';
+                    ctx.drawImage(img, 0, 0);
+                    canvas.toBlob(resolve, 'image/png');
+                };
+                img.onerror = reject;
+                img.src = imgUrl;
+            });
+        } catch (e) {
+            console.error("Processing error:", e);
+            return null;
+        }
     }
 
     // --- Single UI ---
     document.getElementById('upload-single').addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
+        
+        const status = document.getElementById('single-status');
+        status.innerText = "⏳ Processing...";
         document.getElementById('single-result').style.display = 'none';
         
         const blob = await removeBG(file);
-        const url = URL.createObjectURL(blob);
-        const preview = document.getElementById('preview-img');
-        preview.src = url;
-        preview.style.display = 'block';
-        
-        const dl = document.getElementById('dl-single');
-        dl.href = url;
-        dl.download = `cleaned_${file.name.split('.')[0]}.png`;
-        document.getElementById('single-result').style.display = 'block';
+        if (blob) {
+            const url = URL.createObjectURL(blob);
+            document.getElementById('preview-img').src = url;
+            document.getElementById('dl-single').href = url;
+            document.getElementById('dl-single').download = `nobg_${file.name.split('.')[0]}.png`;
+            document.getElementById('single-result').style.display = 'block';
+            status.innerText = "✅ Done!";
+        } else {
+            status.innerText = "❌ Processing failed.";
+        }
     });
 
     // --- Batch UI ---
@@ -216,16 +230,18 @@
             fill.style.width = ((i+1)/batchQueue.length)*100 + '%';
             
             const blob = await removeBG(batchQueue[i]);
-            zip.file(`nobg-${batchQueue[i].name.split('.')[0]}.png`, blob);
+            if (blob) {
+                zip.file(`nobg-${batchQueue[i].name.split('.')[0]}.png`, blob);
+            }
         }
         
-        status.innerText = "Creating ZIP...";
+        status.innerText = "Finalizing ZIP...";
         const zipContent = await zip.generateAsync({type: 'blob'});
         const dlZip = document.getElementById('dl-zip');
         dlZip.href = URL.createObjectURL(zipContent);
-        dlZip.download = "toolbox_batch_results.zip";
+        dlZip.download = "batch_results.zip";
         dlZip.style.display = 'block';
-        startBtn.innerText = "Batch Finished!";
+        startBtn.innerText = "Finished!";
     });
 </script>
 
